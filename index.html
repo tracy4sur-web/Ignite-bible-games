@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ignite Bible Games</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: 'DM Sans', sans-serif; 
+      background: linear-gradient(135deg, #FFD700, #6BA82F);
+      color: #333;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    .card {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    h1 { color: #6BA82F; margin-bottom: 40px; text-align: center; }
+    .scripture { 
+      background: #FFF9E6; 
+      border-left: 4px solid #FFD700; 
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 4px;
+      font-style: italic;
+    }
+    button {
+      background: #6BA82F;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+    button:hover { background: #5a9724; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📖 Ignite Bible Games</h1>
+    <div id="game"></div>
+  </div>
+
+  <script src="quizData.js"></script>
+  <script>
+    let currentQ = 0;
+    let answerRevealed = false;
+
+    function renderQuestion() {
+      const q = BIBLE_REPOSITORY[0].questions[currentQ];
+      const game = document.getElementById('game');
+      
+      game.innerHTML = `
+        <div class="card">
+          <h2>${q.q}</h2>
+          ${q.options ? `
+            <div>
+              ${q.options.map((opt, i) => `<p>${String.fromCharCode(65+i)}) ${opt}</p>`).join('')}
+            </div>
+          ` : ''}
+          <button onclick="toggleAnswer()">👁 Reveal Answer</button>
+          ${answerRevealed ? `
+            <div class="card" style="background: #F5F5F5;">
+              <strong>Answer:</strong> ${q.answer}
+              <div class="scripture">${q.scripture}</div>
+              <p><strong>💬 Spark:</strong> ${q.spark}</p>
+            </div>
+          ` : ''}
+          <button onclick="nextQuestion()">Next →</button>
+        </div>
+      `;
+    }
+
+    function toggleAnswer() {
+      answerRevealed = !answerRevealed;
+      renderQuestion();
+    }
+
+    function nextQuestion() {
+      if (currentQ < BIBLE_REPOSITORY[0].questions.length - 1) {
+        currentQ++;
+        answerRevealed = false;
+        renderQuestion();
+      } else {
+        alert('Game complete!');
+      }
+    }
+
+    renderQuestion();
+  </script>
+</body>
+</html>
