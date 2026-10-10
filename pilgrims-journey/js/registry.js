@@ -8,6 +8,7 @@ window.PJ = (function () {
   var extras = [];
   var restoration = [];
   var loadErrors = [];
+  var charades = [];
 
   // A typing mistake in a content file stops that file loading; remember it so
   // "Check content" can point to it instead of the chapter silently vanishing.
@@ -20,6 +21,7 @@ window.PJ = (function () {
     chapters: chapters,
     extras: extras,
     restoration: restoration,
+    charades: charades,
     loadErrors: loadErrors,
 
     // A whole chapter (stage) of the journey. Chapters play in the order they are added.
@@ -27,6 +29,9 @@ window.PJ = (function () {
 
     // One restoration question (used after a wrong choice to win back lamp oil).
     addRestoration: function (item) { restoration.push(item); },
+
+    // One charades card (acted out during restoration).
+    addCharade: function (item) { charades.push(item); },
 
     // Your own moral dilemma, added to the end of an existing chapter.
     addDilemma: function (dilemma) {

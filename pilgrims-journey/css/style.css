@@ -307,6 +307,16 @@ label.check input { width: 1.3rem; height: 1.3rem; }
 .spark { border: 2px dashed var(--accent); border-radius: 14px; padding: .9rem 1.1rem; margin: 1rem 0; }
 .spark b { color: var(--accent); }
 
+/* ---------- Charades ---------- */
+.timer {
+  font-family: var(--font-head); font-weight: 800; line-height: 1;
+  font-size: clamp(5rem, 18vw, 10rem); color: var(--accent);
+  margin: .5rem 0;
+}
+.timer.hurry { color: var(--bad); animation: flicker .5s infinite; }
+.charade-secret { border-style: dashed !important; }
+.charade-secret h2 { font-size: clamp(1.5rem, 3.5vw, 2.4rem); }
+
 /* ---------- Intro / chapter complete ---------- */
 .ch-num { text-transform: uppercase; letter-spacing: .12em; font-size: .8rem; color: var(--muted); font-weight: 700; }
 .intro h2 { font-size: clamp(1.8rem, 4vw, 2.8rem); margin: .3rem 0 1rem; }

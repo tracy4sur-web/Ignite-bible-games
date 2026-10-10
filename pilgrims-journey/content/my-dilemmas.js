@@ -40,7 +40,20 @@ PJ.addDilemma({
   spark: "What can you say to friends when they want you to do something your family has said no to?"
 });
 
-// ---- Copy this template to add your own (remove the /* and */ around it) ----
+// ---- Your own charades card (acted out during restoration) ----
+// Copy this, remove the /* and */, and fill it in. Only the actor sees "act" and "tip".
+/*
+PJ.addCharade({
+  mode: "both",               // "family", "teen" or "both"
+  emoji: "🎭",
+  act: "What the actor acts out — no talking!",
+  tip: "An idea for how to act it.",
+  answer: "What the guessers should say",
+  verse: { ref: "Book 1:1", text: "The KJV verse, copied exactly." }
+});
+*/
+
+// ---- Copy this template to add your own dilemma (remove the /* and */ around it) ----
 /*
 PJ.addDilemma({
   chapter: "exodus",

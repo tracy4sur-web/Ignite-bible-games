@@ -70,6 +70,23 @@ PJ.addChallenge({
 PJ.addChallenge({ chapter: "flood", mode: "family", type: "path", situation: "…", choices: [ … ], verse: { … } });
 ```
 
+### Charades cards (restoration)
+
+After a wrong choice, restoration takes turns between a question and **🎭 charades**: one actor secretly reads a card while everyone else looks away, then acts it out with no talking. The ready-made cards are in `content/charades.js`. Add your own to `my-dilemmas.js` like this:
+
+```js
+PJ.addCharade({
+  mode: "family",             // "family", "teen" or "both"
+  emoji: "🍞",
+  act: "A boy gives his five loaves and two fish to Jesus, who feeds thousands of people.",
+  tip: "Hold out a small basket, then act amazed as you hand out food to everyone.",
+  answer: "Feeding the five thousand",
+  verse: { ref: "John 6:9", text: "There is a lad here, which hath five barley loaves, and two small fishes:" }
+});
+```
+
+Good charades cards are about **being restored**: saying sorry, giving back, forgiving, coming home. Keep the `act` to one or two sentences that a 7-year-old could perform. Families can switch charades off in the setup screen.
+
 ## Writing dilemmas that actually teach
 
 - **Make the wrong answer tempting.** If the right answer is obvious, it's a quiz, not a dilemma. Give the wrong choice its *best* excuse ("they underpay me anyway", "just this once", "God looks at the heart").

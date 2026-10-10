@@ -22,13 +22,14 @@
 
   const app = document.getElementById('app');
   const content = buildContent();
-  let prefs = Object.assign({ muted: false, autoRead: true }, loadJSON(PREF_KEY) || {});
+  let prefs = Object.assign({ muted: false, autoRead: true, charades: true }, loadJSON(PREF_KEY) || {});
   let state = loadJSON(SAVE_KEY);
   if (!validState(state)) state = null;
   else if (state.inChapter && !Array.isArray(state.inChapter.order)) state.inChapter = null;
   if (state && !Number.isInteger(state.turn)) state.turn = 0;
   if (state && !Number.isInteger(state.faithful)) state.faithful = 0;
   let ui = {};
+  let timerId = null;
 
   // ---------- Small helpers ----------
   function esc(s) {
@@ -119,11 +120,23 @@
     const restoration = [];
     window.PJ.restoration.forEach((r, i) => add(restoration, Object.assign({ type: 'quiz' }, r), 'Restoration question ' + (i + 1)));
 
+    const charades = { family: [], teen: [] };
+    (window.PJ.charades || []).forEach((c, i) => {
+      const where = 'Charade #' + (i + 1) + (c && hasText(c.answer) ? ' (“' + c.answer.slice(0, 40) + '”)' : '');
+      if (!c || !hasText(c.act)) return problems.push(where + ' needs an "act" (what the actor acts out) — skipped.');
+      if (!hasText(c.answer)) return problems.push(where + ' needs an "answer" (what the guessers should say) — skipped.');
+      if (c.verse && (!hasText(c.verse.ref) || !hasText(c.verse.text))) return problems.push(where + ' has a verse that needs both "ref" and "text" — skipped.');
+      const mode = c.mode || 'both';
+      if (['family', 'teen', 'both'].indexOf(mode) < 0) return problems.push(where + ' has mode "' + mode + '" — use family, teen or both.');
+      if (mode !== 'teen') charades.family.push(c);
+      if (mode !== 'family') charades.teen.push(c);
+    });
+
     chapters.forEach(ch => {
       if (!ch.family.length) problems.push('Chapter "' + ch.id + '" has no Family challenges.');
       if (!ch.teen.length) problems.push('Chapter "' + ch.id + '" has no Teens & Adults challenges.');
     });
-    return { chapters, restoration, problems: Array.from(new Set(problems)) };
+    return { chapters, restoration, charades, problems: Array.from(new Set(problems)) };
   }
 
   function validState(s) {
@@ -207,6 +220,7 @@
   // ---------- Rendering helpers ----------
   function show(html, theme) {
     stopSpeech();
+    if (timerId) { clearInterval(timerId); timerId = null; }
     document.body.className = 'theme-' + theme;
     app.innerHTML = html;
     window.scrollTo(0, 0);
@@ -293,7 +307,7 @@
         <li data-read><b>Taking turns.</b> Each challenge belongs to one team. Other teams may give advice, but that team makes the final decision. In the last chapter, all teams answer together.</li>
         <li data-read><b>Challenges.</b> Moral choices, choose-the-path decisions, Bible puzzles and put-it-in-order puzzles.</li>
         <li data-read><b>Lamp oil 🪔.</b> Your shared lamp starts every chapter full. Faithful choices add oil. Wrong choices show you where they lead, and cost oil.</li>
-        <li data-read><b>Restoration 🙏.</b> After a wrong choice, a restoration question lets you win oil back — because God always offers a way back.</li>
+        <li data-read><b>Restoration 🙏.</b> After a wrong choice, a restoration challenge lets you win oil back — because God always offers a way back. Restorations take turns between a question and 🎭 <b>charades</b>: one actor peeks at a secret card while everyone else looks away, then acts it out with no talking. Guess it before the timer runs out, and tap “They guessed it!” (honour system!).</li>
         <li data-read><b>Family mode</b> can never be failed, and puzzles can be tried again. <b>Teens & Adults mode</b> gives one try per question; if the lamp goes out, you replay that chapter. Earlier chapters are never lost.</li>
         <li data-read><b>💬 Spark.</b> After moral choices, pause and talk about the Spark question. This is where the real learning happens!</li>
         <li data-read><b>Saving.</b> Progress saves on this device. At the end of each chapter you also get a <b>save code</b> — write it down or take a photo to continue on any device.</li>
@@ -322,6 +336,7 @@
       <div class="seg">${[1, 2, 3, 4].map(n => `<button class="${s.teamCount === n ? 'on' : ''}" data-act="setTeams" data-n="${n}">${n}</button>`).join('')}</div>
       <div class="teams">${nameInputs}</div>
       <label class="check"><input type="checkbox" data-pref="autoRead" ${prefs.autoRead ? 'checked' : ''}> Read each screen aloud automatically in Family mode (a grown-up can also be the narrator)</label>
+      <label class="check"><input type="checkbox" data-pref="charades" ${prefs.charades ? 'checked' : ''}> Include 🎭 charades in restoration (someone acts out a Bible story or a ‘making it right’ scene)</label>
       <div class="row end">
         <button class="btn" data-act="title">Back</button>
         <button class="btn primary" data-act="startGame">Begin the journey →</button>
@@ -506,7 +521,7 @@
       ${verseBlock(item.verse)}
       ${r.moral ? sparkBlock(item.spark) : ''}
       <div class="row end">
-        ${r.restore && content.restoration.length
+        ${r.restore && restorationAvailable()
           ? '<button class="btn primary" data-act="restore">🙏 Restoration challenge →</button>'
           : '<button class="btn primary" data-act="next">Next →</button>'}
       </div>
@@ -514,13 +529,26 @@
     autoRead();
   }
 
+  function charadePool() { return prefs.charades ? content.charades[state.mode] : []; }
+  function restorationAvailable() { return content.restoration.length > 0 || charadePool().length > 0; }
+
+  // Picks an unused index from a pool, starting over once every item has been used.
+  function pickFresh(size, used) {
+    let fresh = [];
+    for (let i = 0; i < size; i++) if (used.indexOf(i) < 0) fresh.push(i);
+    if (!fresh.length) { used.length = 0; for (let i = 0; i < size; i++) fresh.push(i); }
+    const pick = fresh[Math.floor(Math.random() * fresh.length)];
+    used.push(pick);
+    return pick;
+  }
+
   function renderRestoration() {
     const ic = state.inChapter;
-    const pool = content.restoration.map((_, i) => i);
-    let fresh = pool.filter(i => ic.usedRestore.indexOf(i) < 0);
-    if (!fresh.length) { ic.usedRestore = []; fresh = pool; }
-    const pick = fresh[Math.floor(Math.random() * fresh.length)];
-    ic.usedRestore.push(pick);
+    ic.restoreCount = (ic.restoreCount || 0) + 1;
+    // Alternate: charades first, then a question, then charades… (whichever pools exist)
+    const useCharade = charadePool().length > 0 && (!content.restoration.length || ic.restoreCount % 2 === 1);
+    if (useCharade) return renderCharadeIntro();
+    const pick = pickFresh(content.restoration.length, ic.usedRestore);
     persist();
     const r = content.restoration[pick];
     ui = { restore: pick, wrong: new Set(), opts: shuffle(r.options.map((_, i) => i)) };
@@ -532,6 +560,99 @@
       <p class="question" data-read>${esc(r.question)}</p>
       ${optButtons(ui.opts, i => r.options[i].text, 'restorePick')}
       <p class="hint" id="hint"></p>
+    </div></main>`, state.mode);
+    autoRead();
+  }
+
+  // ---------- Charades restoration ----------
+  // One shared screen: everyone else looks away while the actor peeks, then the card is hidden.
+  function renderCharadeIntro() {
+    const ic = state.inChapter;
+    if (!ic.usedCharades) ic.usedCharades = [];
+    const pick = pickFresh(charadePool().length, ic.usedCharades);
+    persist();
+    ui = { charade: pick };
+    const { item } = current();
+    const who = item && item.allTeams || state.teams.length === 1 ? 'Choose one actor' : esc(teamName()) + ', choose one actor';
+    show(`${topbar(true)}<main class="wrap"><div class="card center stack">
+      <div class="kind">🎭 Charades Restoration</div>
+      <span class="big-symbol" aria-hidden="true">🎭</span>
+      <h2 data-read>Act out a story of restoration!</h2>
+      <p class="lead" data-read>${who}. Everyone else: close your eyes or turn around!</p>
+      <p class="muted" data-read>The actor acts it out with no talking and no sounds. Everyone else guesses. Guess it in time to refill your lamp.</p>
+      ${state.mode === 'family' ? '<p class="small muted" data-read>Little actor? A grown-up can peek too and whisper it to them.</p>' : ''}
+      <div class="row center"><button class="btn primary" data-act="charadePeek">🙈 Everyone’s looking away — show the actor</button></div>
+    </div></main>`, state.mode);
+    autoRead();
+  }
+
+  function renderCharadeSecret() {
+    const c = charadePool()[ui.charade];
+    // Nothing here is marked data-read, so read-aloud can never give the answer away.
+    show(`${topbar(true)}<main class="wrap"><div class="card center stack charade-secret">
+      <div class="kind">🤫 For the actor’s eyes only</div>
+      <span class="big-symbol" aria-hidden="true">${esc(c.emoji || '🎭')}</span>
+      <h2>${esc(c.act)}</h2>
+      ${hasText(c.tip) ? `<p class="muted">💡 ${esc(c.tip)}</p>` : ''}
+      <p class="small muted">Guessers should say something like: <b>${esc(c.answer)}</b></p>
+      <div class="row center"><button class="btn primary" data-act="charadeAct">Got it — hide this and start the timer ▶</button></div>
+    </div></main>`, state.mode);
+  }
+
+  function renderCharadeAct() {
+    let left = state.mode === 'family' ? 90 : 60;
+    show(`${topbar(true)}<main class="wrap"><div class="card center stack">
+      <div class="kind">🎭 Charades Restoration</div>
+      <h2 data-read>Action! No talking!</h2>
+      <p class="lead" data-read>Everyone else: open your eyes and shout out your guesses!</p>
+      <div class="timer" id="timer" aria-live="off">${left}</div>
+      <p class="hint" id="timerNote"></p>
+      <div class="row center">
+        <button class="btn" data-act="charadeStop">⏹ Time’s up / we give up</button>
+        <button class="btn primary" data-act="charadeGuessed">✅ They guessed it!</button>
+      </div>
+    </div></main>`, state.mode);
+    const el = document.getElementById('timer');
+    timerId = setInterval(() => {
+      left--;
+      el.textContent = Math.max(0, left);
+      el.classList.toggle('hurry', left <= 10);
+      if (left <= 3 && left > 0) Sound.click();
+      if (left <= 0) {
+        clearInterval(timerId); timerId = null;
+        Sound.bad();
+        el.textContent = '⏰';
+        document.getElementById('timerNote').textContent = 'Time! Did someone guess it before the buzzer?';
+      }
+    }, 1000);
+    autoRead();
+  }
+
+  function renderCharadeRetry() {
+    show(`${topbar(true)}<main class="wrap"><div class="card center stack">
+      <span class="big-symbol" aria-hidden="true">🔁</span>
+      <h2 data-read>Not yet — want another go?</h2>
+      <p class="lead" data-read>God gives second chances, and so do we! The same actor can try again, or you can see the answer.</p>
+      <div class="row center">
+        <button class="btn" data-act="charadeReveal">Show the answer</button>
+        <button class="btn primary" data-act="charadeAct">🎭 Act it again</button>
+      </div>
+    </div></main>`, state.mode);
+    autoRead();
+  }
+
+  function renderCharadeDone(ok, delta) {
+    const c = charadePool()[ui.charade];
+    const lampOut = state.mode === 'teen' && state.inChapter.oil <= 0;
+    show(`${topbar(true)}<main class="wrap"><div class="card result center ${ok ? 'good' : 'bad'}">
+      <h2 class="verdict" data-read>${ok ? '🎭 Bravo — restored!' : 'Good try!'}</h2>
+      <span class="big-symbol" aria-hidden="true">${esc(c.emoji || '🎭')}</span>
+      <p class="answer" data-read>It was: <b>${esc(c.answer)}</b></p>
+      <p class="body-text" data-read>${ok ? 'God forgives and restores. Your lamp burns brighter again.' : 'Keep going — God’s mercy is new every morning.'}</p>
+      ${oilNote(delta)}
+      ${verseBlock(c.verse)}
+      ${sparkBlock(c.spark)}
+      <div class="row center"><button class="btn primary" data-act="next">${lampOut ? 'Continue…' : 'Next →'}</button></div>
     </div></main>`, state.mode);
     autoRead();
   }
@@ -643,7 +764,7 @@
       <h2>🛠 Content check</h2>
       <p>Use this after editing <code>content/my-dilemmas.js</code> (or any content file) to make sure everything was read correctly.</p>
       <table class="check"><thead><tr><th>Chapter</th><th>Name to use</th><th>Family</th><th>Teen</th><th>Your dilemmas</th></tr></thead><tbody>${rows}</tbody></table>
-      <p>Restoration questions: <b>${content.restoration.length}</b></p>
+      <p>Restoration questions: <b>${content.restoration.length}</b> · Charades: <b>${content.charades.family.length}</b> Family, <b>${content.charades.teen.length}</b> Teen</p>
       ${content.problems.length
         ? `<h3>⚠️ Problems found</h3><ul class="problems">${content.problems.map(p => `<li>${esc(p)}</li>`).join('')}</ul>`
         : '<p class="ok">✅ No problems found. Everything loaded correctly.</p>'}
@@ -754,6 +875,14 @@
       resolvePuzzle(false, item.items.join(' → '));
     },
     restore: renderRestoration,
+    charadePeek: renderCharadeSecret,
+    charadeAct: renderCharadeAct,
+    charadeGuessed: () => {
+      const d = changeOil(rules().restoreGain); persist(); Sound.good();
+      renderCharadeDone(true, d);
+    },
+    charadeStop: () => (rules().retry ? renderCharadeRetry() : renderCharadeDone(false, 0)),
+    charadeReveal: () => renderCharadeDone(false, 0),
     restorePick: el => {
       const r = content.restoration[ui.restore];
       if (r.options[+el.dataset.i].correct) {
